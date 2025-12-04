@@ -1,0 +1,432 @@
+name: Create AI integration branch and open draft PR (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to create'
+        required: false
+        default: 'codex-chatgpt-setup'
+      pr_title:
+        description: 'Draft PR title'
+        required: false
+        default: 'chore: add OpenAI assistant integration (draft)'
+      pr_body:
+        description: 'Draft PR body'
+        required: false
+        default: 'Adds an opt-in OpenAI assistant: workflow, script, docs, and labels. To enable, add OPENAI_API_KEY and optional secrets. All AI suggestions require human review.'
+      base:
+        description: 'Base branch for PR'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  create-branch-and-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (read)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+
+      - name: Prepare git and create branch
+        run: |
+          BRANCH="${{ github.event.inputs.branch || 'codex-chatgpt-setup' }}"
+          echo "Creating branch: $BRANCH"
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          # create branch from current default (checkout main)
+          git checkout -b "$BRANCH"
+
+      - name: Write AI integration files
+        run: |
+          # Create directories
+          mkdir -p .github/ISSUE_TEMPLATE .github/workflows scripts
+
+          # README.md
+          cat > README.md <<'EOF'
+          # Cannabis-Doctor-Jr-Kapo
+
+          Cannabis diagnostic
+
+          This repository contains the Cannabis diagnostic project.
+
+          AI collaboration (Codex/ChatGPT)
+          --------------------------------
+          This repository includes an optional, opt-in example integration that shows how an AI assistant (e.g., ChatGPT / Codex) can help with:
+          - Drafting reviewer-friendly PR descriptions
+          - Triage suggestions for new issues
+          - Adding an `ai-assisted` label to mark AI-generated content (human review required)
+
+          Important: the workflows are examples and are disabled until you add the required repository secrets (see below). The assistant is explicitly opt-in — the action only runs when configured with a secret and you can review its suggestions before merging.
+
+          Required repository secrets (add these in Settings → Secrets & variables → Actions):
+          - OPENAI_API_KEY — API key for OpenAI (required to enable the assistant)
+          - OPENAI_MODEL — (optional) model name, default: gpt-4o
+          - OPENAI_TEMPERATURE — (optional) float, 0.0–1.0
+
+          See .github/openai-config.example for example values and scripts/openai_assistant.py for the implementation used by the workflow.
+
+          Security & review
+          - All AI-generated content must be reviewed by a human before merging.
+          - Use the `ai-assisted` label for PRs or issues that contain AI-generated content.
+          EOF
+
+          # CONTRIBUTING.md
+          cat > .github/CONTRIBUTING.md <<'EOF'
+          # Contributing
+
+          Thanks for contributing!
+
+          AI-assisted contributions
+          - If you used an AI assistant to generate code, documentation or tests, mark the PR with the `ai-assisted` label, and in the PR body include:
+            - The prompts you used (short summary).
+            - What you reviewed or changed from the AI output.
+          - Human review is required for all AI-generated content. Ensure you add a human reviewer and explain what checks were run.
+
+          How to contribute
+          1. Fork the repository.
+          2. Create a branch: `git checkout -b my-feature`.
+          3. Run tests / linters and ensure changes pass.
+          4. Open a PR with a clear description. Add `ai-assisted` label if applicable.
+          5. Add reviewers and link any issues.
+
+          Automated assistant
+          - This repo contains an example workflow that can run an AI assistant on new PRs and issues; it is opt-in and requires `OPENAI_API_KEY` to be added as a repository secret.
+          EOF
+
+          # CODE_OF_CONDUCT.md
+          cat > .github/CODE_OF_CONDUCT.md <<'EOF'
+          # Contributor Covenant Code of Conduct
+
+          This project uses the Contributor Covenant v2.1 as its code of conduct.
+
+          Our community is dedicated to providing a welcoming and respectful environment. Harassment and hateful behavior are not tolerated.
+
+          If you experience or witness unacceptable behavior, please contact the repository maintainers.
+          EOF
+
+          # PULL_REQUEST_TEMPLATE.md
+          cat > .github/PULL_REQUEST_TEMPLATE.md <<'EOF'
+          <!-- Pull Request Template -->
+
+          ## Summary
+
+          Describe the changes and the problem they solve.
+
+          ## Checklist
+
+          - [ ] Tests added or updated
+          - [ ] Linting passed
+          - [ ] Human-reviewed any AI-generated code (if applicable)
+          - [ ] Add `ai-assisted` label if the PR includes content generated by an AI
+
+          ## Notes for reviewers
+
+          Include any setup steps, context, or known issues.
+
+          If this PR used an AI assistant, briefly state the prompts used and what you validated.
+          EOF
+
+          # ISSUE_TEMPLATE/bug_report.md
+          cat > .github/ISSUE_TEMPLATE/bug_report.md <<'EOF'
+          ---
+          name: Bug report
+          about: Create a report to help us improve
+          ---
+
+          **Describe the bug**
+          A clear and concise description of what the bug is.
+
+          **To Reproduce**
+          Steps to reproduce the behavior:
+          1. ...
+          2. ...
+
+          **Expected behavior**
+          What you expected to happen.
+
+          **Environment**
+          - OS:
+          - Node/Python/etc version:
+
+          **Additional context**
+          Add any other context about the problem here.
+
+          If you used an AI to help create this issue, mention it and include the prompts or reasoning used.
+          EOF
+
+          # openai-config.example
+          cat > .github/openai-config.example <<'EOF'
+          # Example OpenAI/Assistant configuration (DO NOT store real keys here)
+          # Add these as repository secrets or environment variables for the workflow to run.
+
+          OPENAI_API_KEY=your_openai_api_key_here
+          OPENAI_MODEL=gpt-4o
+          OPENAI_TEMPERATURE=0.0
+          ASSISTANT_LABEL=ai-assisted
+          MAX_RESPONSE_TOKENS=600
+          EOF
+
+          # assistant-config.yaml
+          cat > .github/assistant-config.yaml <<'EOF'
+          label: ai-assisted
+          safe_checks:
+            - "Run unit tests"
+            - "Perform static analysis (linters)"
+            - "Review security-sensitive code changes manually"
+          issue_templates:
+            triage_template: |
+              Suggested severity: {severity}
+              Areas to check: {areas}
+              Suggested next steps:
+              - Reproduce the issue locally using the steps given
+              - Collect logs and environment details
+          EOF
+
+          # requirements.txt
+          cat > requirements.txt <<'EOF'
+          openai>=1.0.0
+          PyGithub>=1.55
+          PyYAML>=6.0
+          EOF
+
+          # scripts/openai_assistant.py (robust example)
+          cat > scripts/openai_assistant.py <<'EOF'
+          #!/usr/bin/env python3
+          """
+          Example assistant script: called by GitHub Actions.
+          - Reads GITHUB_EVENT_PATH to determine if this is a PR or Issue event.
+          - Calls OpenAI to produce suggestions and posts a comment via the GitHub token.
+          - Adds an `ai-assisted` label to the PR/Issue if configured to do so.
+          This is an example; adapt prompts and safety checks to your needs.
+          """
+
+          import os
+          import json
+          import sys
+          import traceback
+          from github import Github
+          import openai
+          import pathlib
+          import yaml
+
+          # Config
+          EVENT_PATH = os.getenv("GITHUB_EVENT_PATH")
+          GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+          OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+          OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+          OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.0"))
+          ASSISTANT_LABEL = os.getenv("ASSISTANT_LABEL", "ai-assisted")
+          MAX_RESPONSE_TOKENS = int(os.getenv("MAX_RESPONSE_TOKENS", "600"))
+
+          if not EVENT_PATH or not os.path.exists(EVENT_PATH):
+              print("No GITHUB_EVENT_PATH; exiting.")
+              sys.exit(0)
+
+          with open(EVENT_PATH) as f:
+              event = json.load(f)
+
+          # Load assistant-config.yaml if present
+          config = {}
+          cfg_path = pathlib.Path(".github/assistant-config.yaml")
+          if cfg_path.exists():
+              try:
+                  config = yaml.safe_load(cfg_path.read_text())
+              except Exception:
+                  print("Failed to load assistant-config.yaml, continuing with defaults.")
+
+          openai.api_key = OPENAI_API_KEY
+
+          gh = Github(GITHUB_TOKEN) if GITHUB_TOKEN else None
+
+          def call_openai(messages):
+              try:
+                  resp = openai.ChatCompletion.create(
+                      model=OPENAI_MODEL,
+                      messages=messages,
+                      temperature=OPENAI_TEMPERATURE,
+                      max_tokens=MAX_RESPONSE_TOKENS,
+                  )
+                  return resp['choices'][0]['message']['content'].strip()
+              except Exception as e:
+                  print("OpenAI request failed:", e)
+                  traceback.print_exc()
+                  return None
+
+          def comment_and_label(repo_full, issue_number, body):
+              if not gh:
+                  print("No GITHUB_TOKEN available; skipping comment.")
+                  return
+              repo = gh.get_repo(repo_full)
+              issue = repo.get_issue(number=issue_number)
+              issue.create_comment(body)
+              # Add label if configured
+              try:
+                  labels = [l.name for l in repo.get_labels()]
+                  if ASSISTANT_LABEL in labels:
+                      issue.add_to_labels(ASSISTANT_LABEL)
+                  else:
+                      # Try to create the label if allowed
+                      try:
+                          repo.create_label(ASSISTANT_LABEL, "f29513", "AI-assisted content")
+                          issue.add_to_labels(ASSISTANT_LABEL)
+                      except Exception:
+                          # skip if not allowed
+                          pass
+              except Exception:
+                  pass
+
+          def handle_pull_request(payload):
+              pr = payload['pull_request']
+              title = pr.get('title', '')
+              body = pr.get('body') or ''
+              repo_full = payload['repository']['full_name']
+              pr_number = pr['number']
+
+              messages = [
+                  {"role": "system", "content": "You are a helpful assistant that writes reviewer-friendly PR descriptions and checklists."},
+                  {"role": "user", "content": f"PR title: {title}\n\nCurrent PR body:\n{body}\n\nWrite an improved, concise PR description with a checklist of what reviewers should validate. Also suggest any important security checks and tests to run."}
+              ]
+              suggestion = call_openai(messages)
+              if not suggestion:
+                  print("No suggestion returned.")
+                  return
+
+              comment = (
+                  ":robot: AI assistant suggestion (please review carefully):\n\n"
+                  f"{suggestion}\n\n"
+                  "_Note: This is an automated suggestion. All AI-generated content must be reviewed by a human before merging._"
+              )
+
+              comment_and_label(repo_full, pr_number, comment)
+
+          def handle_issue(payload):
+              issue = payload['issue']
+              title = issue.get('title', '')
+              body = issue.get('body') or ''
+              repo_full = payload['repository']['full_name']
+              issue_number = issue['number']
+
+              messages = [
+                  {"role": "system", "content": "You are a helpful triage assistant. Provide severity and suggested next steps for maintainers."},
+                  {"role": "user", "content": f"Issue title: {title}\n\nBody:\n{body}\n\nAssess severity (low/medium/high/critical), identify affected areas, and suggest next steps."}
+              ]
+              suggestion = call_openai(messages)
+              if not suggestion:
+                  print("No suggestion returned for issue.")
+                  return
+
+              comment = (
+                  ":robot: AI assistant triage suggestion (please review):\n\n"
+                  f"{suggestion}\n\n"
+                  "_Note: This is an automated suggestion. All AI-generated content must be reviewed by a human._"
+              )
+
+              comment_and_label(repo_full, issue_number, comment)
+
+          def main():
+              if 'pull_request' in event:
+                  handle_pull_request(event)
+              elif 'issue' in event:
+                  handle_issue(event)
+              else:
+                  print("Event not a pull_request or issue; exiting.")
+
+          if __name__ == "__main__":
+              main()
+          EOF
+
+          # assistant workflow (example, opt-in)
+          cat > .github/workflows/openai-assistant.yml <<'EOF'
+          name: OpenAI Assistant (example, opt-in)
+
+          on:
+            pull_request:
+              types: [opened, edited]
+            issues:
+              types: [opened]
+
+          permissions:
+            contents: read
+            issues: write
+            pull-requests: write
+
+          concurrency:
+            group: openai-assistant-${{ github.ref }}
+            cancel-in-progress: true
+
+          jobs:
+            run-assistant:
+              runs-on: ubuntu-latest
+              steps:
+                - name: Check out repository
+                  uses: actions/checkout@v4
+
+                - name: Set up Python
+                  uses: actions/setup-python@v4
+                  with:
+                    python-version: "3.11"
+
+                - name: Install dependencies
+                  run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+                - name: Run OpenAI assistant script
+                  env:
+                    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+                    OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+                    OPENAI_TEMPERATURE: ${{ secrets.OPENAI_TEMPERATURE }}
+                    ASSISTANT_LABEL: ${{ secrets.ASSISTANT_LABEL }}
+                    MAX_RESPONSE_TOKENS: 600
+                    GITHUB_EVENT_PATH: ${{ github.event_path }}
+                    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  run: |
+                    python scripts/openai_assistant.py
+          EOF
+
+          # labels.yml
+          cat > .github/labels.yml <<'EOF'
+          - name: ai-assisted
+            color: f29513
+            description: "Content generated or assisted by an AI; requires human review"
+          - name: triage
+            color: 1d76db
+            description: "Issue is awaiting triage"
+          EOF
+
+      - name: Commit and push branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ github.event.inputs.branch || 'codex-chatgpt-setup' }}"
+          git add -A
+          git commit -m "chore: add OpenAI assistant integration (draft)" || echo "No changes to commit"
+          # Push using GITHUB_TOKEN via https
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
+          git push --set-upstream origin "$BRANCH"
+
+      - name: Create draft PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ github.event.inputs.branch || 'codex-chatgpt-setup' }}"
+          TITLE="${{ github.event.inputs.pr_title || 'chore: add OpenAI assistant integration (draft)' }}"
+          BODY="${{ github.event.inputs.pr_body || 'Adds an opt-in OpenAI assistant: workflow, script, docs, and labels. To enable, add OPENAI_API_KEY and optional secrets. All AI suggestions require human review.' }}"
+          BASE="${{ github.event.inputs.base || 'main' }}"
+          API_URL="https://api.github.com/repos/${{ github.repository }}/pulls"
+          payload=$(jq -n --arg title "$TITLE" --arg head "$BRANCH" --arg base "$BASE" --arg body "$BODY" '{title:$title, head:$head, base:$base, body:$body, draft:true}')
+          echo "Creating draft PR with payload: $payload"
+          curl -s -X POST -H "Authorization: token ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "$API_URL" -d "$payload" | jq
+
+      - name: Done
+        run: echo "Branch created, files written, and draft PR opened (if successful)."
